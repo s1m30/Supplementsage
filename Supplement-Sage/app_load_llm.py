@@ -8,7 +8,6 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
 from langchain.retrievers.multi_query import MultiQueryRetriever
 from langchain.retrievers import EnsembleRetriever
-import langgraph
 
 def get_response(query, chat_history,db,memorydbs):
     ### Contextualize question ###
