@@ -12,18 +12,6 @@ from langchain.storage import InMemoryByteStore
 from app_helper import get_youtube_metadata,clean_html,split_text,filter_chunks
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from langchain.chains.query_constructor.ir import (
-    Comparator,
-    Comparison,
-    Operation,
-    Operator,
-    StructuredQuery,
-)
-from langchain.retrievers.self_query.chroma import ChromaTranslator
-from langchain.retrievers.self_query.elasticsearch import ElasticsearchTranslator
-from langchain_core.pydantic_v1 import BaseModel
-
-
 def process_html_with_loader(loader):
     documents = loader.load()
     processed_documents = []
