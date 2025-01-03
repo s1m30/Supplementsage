@@ -1,0 +1,41 @@
+# Streamlit and Django (main frameworks)
+# streamlit==1.24.0
+# django==4.2
+
+# LangChain and related libraries
+langchain_community
+langchain-openai
+langchainhub
+langchain
+langgraph
+langchain-huggingface
+
+# Tokenization and text processing
+tiktoken
+text-generation
+
+# Vector storage and retrieval
+chromadb
+faiss-cpu
+sentence-transformers==2.2.2
+InstructorEmbedding
+
+# Transformer models
+transformers
+
+# PDF handling
+pypdf
+
+# Web scraping
+beautifulsoup4
+selenium
+
+# Additional data and storage management
+pydantic==1.10.8  # Ensure compatibility with langchain dependencies
+
+# Optional but useful: Database and JSON handling for session history
+psycopg2-binary    # For PostgreSQL if used in deployment
+# sqlite3            # For local storage (built-in for many systems)
+
+# Extra embeddings if needed
+InstructorEmbedding

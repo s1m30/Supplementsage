@@ -1,0 +1,15 @@
+env/
+__pycache__/
+.streamlit/
+assets/
+Practice/
+load.py
+main.py
+jsload.py
+main.py
+load_from_database.py
+static/
+db/
+college_data.json
+chroma/
+.env
