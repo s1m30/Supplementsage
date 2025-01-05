@@ -22,11 +22,11 @@ st.sidebar.success("Select a demo above.")
 # Call the function with your preferred image URL
 # Add custom CSS styling for the background image
 
-# def get_img_as_base64(file):
-#     with open(file,"rb") as f:
-#         data= f.read()
-#     return base64.b64encode(data).decode()
-# img=get_img_as_base64("background.jpg")
+def get_img_as_base64(file):
+    with open(file,"rb") as f:
+        data= f.read()
+    return base64.b64encode(data).decode()
+img=get_img_as_base64("background.jpg")
 def add_bg_from_url():
     st.markdown(
         f"""
@@ -44,7 +44,7 @@ def add_bg_from_url():
     )
 
 
-# add_bg_from_url()
+add_bg_from_url()
 
 # About page content
 st.markdown(
