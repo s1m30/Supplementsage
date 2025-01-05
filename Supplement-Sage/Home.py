@@ -37,9 +37,10 @@ def add_bg_from_url():
         <style>
         [data-testid="stAppViewContainer"]{{
             background-image: url("data:image/png;base64,{img}");
-            background-size: center;
+            background-size: cover;
             background-repeat: no-repeat;
             background-attachment: fixed;
+            background-position:center;
         }}
         </style>
         """,
