@@ -40,7 +40,6 @@ def add_bg_from_url():
             background-size: center;
             background-repeat: no-repeat;
             background-attachment: fixed;
-            background-color:rgba(0,0,0,0);
         }}
         </style>
         """,
