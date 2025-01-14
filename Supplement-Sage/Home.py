@@ -14,9 +14,9 @@ from email.mime.multipart import MIMEMultipart
 st.write("# Welcome to SupplementSage! 👋")
 
 def get_img_as_base64(file):
-    with open(file, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+  with open(file, "rb") as f:
+      data = f.read()
+  return base64.b64encode(data).decode()
 
 # Get the current working directory
 current_directory = os.getcwd()
