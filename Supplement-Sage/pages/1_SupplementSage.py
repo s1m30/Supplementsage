@@ -1,26 +1,22 @@
 # Imports
-import os
-import json
-from pathlib import Path
 from typing import Dict, List, Any, Union
 import streamlit as st
-from app_helper import add_to_vector_store, delete_vector_store
-# from streamlit_option_menu import option_menus
-from supa import SupabaseVectorStore
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint
-from app_load_llm import get_response
+from langchain_huggingface import HuggingFaceEmbeddings
+from app_get_response import get_response
 from app_authentication import setup_authentication
-from app_loader import group_sources, load_sources
-from app_helper import choose_llm, add_web_input, add_youtube_input, get_college_data, add_college_questions_to_vector_store, remove_source, get_college_name
-# from cryptography.fernet import Fernet
-# import uuid
-# import datetime
-
-
-#Functions
-# Initialize session state for additional inputs
+from app_component import upload_view_delete
+from langchain_core.vectorstores import InMemoryVectorStore
+from app_component  import choose_llm
+from langchain_openai import OpenAIEmbeddings
+from fpdf import FPDF
+import uuid
+import os
+#Authentication Setup
 supabase,user_id=setup_authentication()
+
+#Session States Initialization
+# Initialize session state for additional inputs
 if "web_inputs" not in st.session_state:
     st.session_state.web_inputs = []
 
@@ -30,96 +26,64 @@ if "youtube_inputs" not in st.session_state:
 # Initialize session state for saved sources
 if "saved_sources" not in st.session_state:
     st.session_state.saved_sources = []
-# Initialize unique document IDs if not present
-if "doc_ids" not in st.session_state:
-    st.session_state.doc_ids = []
-    
-if "db" not in st.session_state:
-    st.session_state.db= SupabaseVectorStore(
-    client=supabase,
-    table_name="vector_store",
-    query_name="match_documents",
-    
-    embedding= HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"),
-)
 
 if "dbs" not in st.session_state:
     st.session_state.dbs=[]
+if "documents" not in st.session_state:
+    st.session_state.documents ={}  # Initialize document dictionary
+    st.session_state.bm25_retriever = None
+ 
+
 
 # Sidebar: User Inputs
 with st.sidebar:
     st.title("🤖💬 Supplement Sage")
-    choose_llm()
-    
-    st.title("Sources")
-    files = st.file_uploader("Upload files", accept_multiple_files=True, type=["txt", "pdf", "docx", "csv"])
-    # Prepare inputs for grouping
-    # Base web and YouTube inputs
-    web_url = st.text_input("Web Loader URL (default)")
-    ytb_url = st.text_input("YouTube Loader URL (default)")
+    #Component for choosing and inputting LLM creds
+    llm=choose_llm()
+    print("Returned LLM: ",llm)
+    #Component for uploading/viewing and deleting
+    upload_view_delete(supabase)
+    st.session_state.embedding= OpenAIEmbeddings() if llm=="openai" else HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    print("embedding",st.session_state.embedding)
+    #Initialize db session_state
+    if "db" not in st.session_state:
+        st.session_state.db=InMemoryVectorStore(embedding=st.session_state.embedding)
+        
 
-    # Buttons to add more inputs
-    if st.button("Add another Web Loader URL"):
-        add_web_input()
+# Export Chats as PDF
+if st.button("Save Chat as PDF"):
+    if st.session_state.messages:
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
 
-    if st.button("Add another YouTube Loader URL"):
-        add_youtube_input()
+        # Add content to the PDF
+        pdf.cell(200, 10, txt="Chat History", ln=True, align='C')
+        pdf.ln(10)  # Add a line break
 
-    # Display additional inputs for Web Loader
-    for i, value in enumerate(st.session_state.web_inputs):
-        st.session_state.web_inputs[i] = st.text_input(f"Additional Web Loader URL {i+1}", value=value)
+        for msg in st.session_state.messages:
+            role = "Human" if isinstance(msg, HumanMessage) else "AI"
+            pdf.multi_cell(0, 10, txt=f"{role}: {msg.content}")
+            pdf.ln(5)  # Add spacing between messages
 
-    # Display additional inputs for YouTube Loader
-    for i, value in enumerate(st.session_state.youtube_inputs):
-        st.session_state.youtube_inputs[i] = st.text_input(f"Additional YouTube Loader URL {i+1}", value=value)
-    all_web_urls = [web_url] + st.session_state.web_inputs
-    all_ytb_urls = [ytb_url] + st.session_state.youtube_inputs
+        # Save PDF
+        pdf_file = f"chat_{str(uuid.uuid4())}_session.pdf"
+        pdf.output(pdf_file)
 
-    # Fetch data
-    st.session_state.college_names = get_college_name(supabase)
-    selected_colleges = st.multiselect("Search or select a college:", options= st.session_state.college_names)
-    # Handle colleges being removed from selection
-    if "last_selected_colleges" not in st.session_state:
-        st.session_state.last_selected_colleges = []
-
-    # Find removed colleges and delete their vector stores
-    removed_colleges = set(st.session_state.last_selected_colleges) - set(selected_colleges)
-    for college in removed_colleges:
-        delete_vector_store(college)
-
-    st.session_state.last_selected_colleges = selected_colleges
-    if st.button("See Questions"):  
-        for college in selected_colleges:
-            st.subheader(college)
-            st.session_state.essay_data=get_college_data(college,supabase)
-            
-            # Display questions and add to vector store
-            st.session_state.dbs.append(add_to_vector_store(college, st.session_state.essay_data))
-            for row in st.session_state.essay_data:
-                st.write(row["question"])
-
-    st.divider()
-
-    # Save Sources
-    if st.button("Save Sources"):
-        grouped_sources = group_sources(files, all_ytb_urls, all_web_urls)
-        # if selected_colleges:
-        #     add_college_questions_to_vector_store(selected_colleges, college_data)
-        if grouped_sources:
-            load_sources(grouped_sources,st.session_state.db,user_id,supabase)
-
-        st.success("Sources saved and questions added to the vector store!")
-    # Display saved sources in an expander
-    with st.expander("Saved Sources", expanded=True):
-        for source in st.session_state.saved_sources:
-            col1, col2 = st.columns([4, 1])  # Create columns for source name and cancel button
-            with col1:
-                st.text(f"{source['name']}")  # Display source name and type
-            with col2:
-                if st.button(f"Remove", key=source["id"]):
-                    remove_source(source["id"])  # Remove source when cancel button is clicked
-                    
-# Main Application
+        # Provide download button for the PDF
+        with open(pdf_file, "rb") as f:
+            st.download_button(
+                label="Download Chat as PDF",
+                data=f,
+                file_name=pdf_file,
+                mime="application/pdf"
+            )
+        
+        os.remove(pdf_file)
+    else:
+        st.warning("No chat messages to save!")
+# Main Application   
 st.title("🧠 SupplementSage: Your AI-Powered College Essay Assistant")
 st.markdown("""
 #### Supplementsage is your #1 A.I. powered tool for college essays.
@@ -139,16 +103,15 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message("Human" if isinstance(message, HumanMessage) else "AI"):
         st.write(message.content)
-st.multiselect("Role",options=["General","Essay grader","University Analysis", "Grammar Correction"])
 
 if prompt := st.chat_input("Ask a question"):
-    st.session_state.messages.append(HumanMessage(content=prompt))
     with st.chat_message("Human"):
         st.markdown(prompt)
 
     with st.chat_message("AI"):
         # human_prompt=HumanMessage(prompt)
-        response=st.write_stream(get_response(prompt, st.session_state.messages,st.session_state.db,  st.session_state.dbs))
+        with st.spinner('Just a bit...'):   
+            response=st.write_stream(get_response(prompt, st.session_state.messages,st.session_state.db,  st.session_state.dbs,llm,st.session_state.repo_id))
+    st.session_state.messages.append(HumanMessage(content=prompt))
     st.session_state.messages.append(AIMessage(content=response))
 
-  

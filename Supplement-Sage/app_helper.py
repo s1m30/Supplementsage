@@ -1,12 +1,16 @@
 import streamlit as st
 from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-import os
 import requests
 from langchain.schema import Document
-from typing import List
 from langchain_core.vectorstores import InMemoryVectorStore
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI,OpenAI
+from langchain_huggingface import HuggingFaceEmbeddings,ChatHuggingFace, HuggingFaceEndpoint
+from langchain_core.callbacks.streaming_stdout import StreamingStdOutCallbackHandler  
+from langchain_community.retrievers import BM25Retriever
+import os
+
+#Functions for Loading HTML Sources
 def clean_html(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
     for tag in soup(["nav", "footer", "script", "style"]):
@@ -59,50 +63,36 @@ def get_youtube_video_info(url):
 @st.fragment
 def remove_source(doc_id: str):
     # Remove the document by its unique ID from the vector store
-    ids=[id[0] for id in doc_id]
-    st.session_state.db.delete(ids=ids)  # Ensure it's a list
-    # Update session state by removing the deleted source
-    st.session_state.saved_sources = [
-        source for source in st.session_state.saved_sources if source["id"] != doc_id
-    ]
-    # Update document IDs
-    st.session_state.doc_ids = [
-        existing_id for existing_id in st.session_state.doc_ids if existing_id != doc_id
-    ]
-    st.rerun() 
-@st.fragment
-def choose_llm():
-    os.environ['LANGCHAIN_API_KEY'] = st.text_input('Enter Langchain API key:', type='password')
-    llms=st.multiselect("Choose your AI provider", options=["openai","vertexai","huggingface"],max_selections=1,default="huggingface")
-    for options in llms:
-        if options=="huggingface":
-            os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.text_input('Enter HuggingFace API key:', type='password')
-        elif options=="openai":
-            os.environ["OPENAI_API_KEY"]=st.text_input('Enter Openai API key:', type='password')
-        elif options=="vertexai":
-            os.environ["GOOGLE_API_KEY"]=st.text_input("Enter Vertexai API key:", type='password')
-        else:
-            pass
-    os.environ["UNSTRUCTURED_API_KEY"]= st.text_input('Enter Unstructured API key(optional):', type='password',help="Useful for websites or PDF files containing images or illustrations")
-    if not (os.environ.get('LANGCHAIN_API_KEY') and (os.environ.get("HUGGINGFACEHUB_API_TOKEN") or os.environ.get("OPENAI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))):
-        st.warning('Please enter your credentials!', icon='⚠️')
+    if isinstance(doc_id, list):
+        doc_id = doc_id[0]  # Extract the ID from the list if necessary
+    
+    st.session_state.db.delete(ids=[doc_id])  # Ensure `ids` is a list
+
+    # Update session state by removing the deleted document
+    if doc_id in st.session_state.documents:
+        del st.session_state.documents[doc_id]
     else:
-        st.success('Credentials verified. Proceed!', icon='👉')
+        print(f"Document with ID {doc_id} not found in session state.")
 
-def add_college_questions_to_vector_store(selected_colleges, full_data):
-    """
-    Add college supplemental questions to the vector store.
-    """
-    documents = [
-        Document(page_content=question, metadata={"college": college})
-        for college in selected_colleges
-        if college in full_data
-        for question in full_data[college]
+    # Rebuild the BM25 retriever with updated documents
+    if st.session_state.documents:
+        # Flatten all document lists into a single list
+        all_docs = [doc for docs in st.session_state.documents.values() for doc in docs]
+        st.session_state.bm25_retriever = BM25Retriever.from_documents(all_docs)
+    else:
+        st.session_state.bm25_retriever = None  # Clear retriever if no documents are left
+
+    # Update `saved_sources` to reflect the removal
+    st.session_state.saved_sources = [
+        source for source in st.session_state.saved_sources if doc_id not in source["id"]
     ]
-    if documents:
-        st.session_state.db.add_documents(documents)
-        
 
+    print("Remaining documents:", st.session_state.documents)
+    print("Updated saved sources:", st.session_state.saved_sources)
+
+    st.rerun() 
+
+#Function to get college essay prompts
 @st.cache_data
 def get_college_data(college,_sup):
     # Fetch data from Supabase
@@ -128,25 +118,41 @@ def get_college_name(_sup):
    unique_college_names = list({item['college_name'] for item in all_values})
    return unique_college_names
 
-if "vector_stores" not in st.session_state:
-    st.session_state.vector_stores = []
 # Function to add questions to the vector store
 def add_to_vector_store(college, essay_data):
-    if college not in st.session_state:
-        st.session_state.college = InMemoryVectorStore(embedding=HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"))
-    
-    vector_store = st.session_state.college
-    
-    for row in essay_data:
-        metadata = {
+    documents = [
+        Document(page_content=college+"\n"+row["question"],  metadata = {
             "Essay Type": "Supplemental essays" if college != "Personal essay" else "Personal essays",
             "College": college if college != "Personal essay" else "All"
-        }
-        vector_store.add_texts([row["question"]], [metadata])
-    print("yes sir")
-    return vector_store
+        })
+        for row in essay_data
+    ]
+    if college not in st.session_state:
+        st.session_state.college = InMemoryVectorStore.from_documents(documents=documents,embedding=HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"))
+    return st.session_state.college
 
 # Function to delete a vector store for a college
 def delete_vector_store(college):
     if college in st.session_state:
         del st.session_state[college]
+        
+@st.cache_resource  # Use cache_resource for objects that don't serialize well
+def llm_getter(llm, repo_id=""):  # Make repo_id optional
+    if llm == "huggingface":
+        if repo_id=="":
+            repo_id = "HuggingFaceH4/zephyr-7b-beta"
+        hf1= HuggingFaceEndpoint(
+            repo_id=repo_id,
+            task="text-generation",
+            max_new_tokens=1024,
+            repetition_penalty=1.03,
+            callbacks=[StreamingStdOutCallbackHandler()],
+        )
+        hf2=HuggingFaceEndpoint(
+            repo_id="google/gemma-7b"
+        )
+        return hf2,ChatHuggingFace(llm=hf1).bind(max_tokens=8192, temperature=0.0) # Return only the ChatHuggingFace object
+    elif llm == "openai":
+        return OpenAI(temperature=0.0),ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0)
+    else:
+        raise ValueError(f"Invalid llm: {llm}. Must be 'huggingface', 'openai.")

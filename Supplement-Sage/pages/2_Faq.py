@@ -16,7 +16,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-au.render_cta()
+# au.render_cta()
 
 st.title("FAQ")
 
@@ -64,8 +64,5 @@ with st.expander("Is my information kept confidential on SupplementSage?"):
     st.markdown(
         "Yes, your privacy is our priority. We do not store personally identifiable information. Uploaded documents are secured with Row Level Security to ensure only you can access them. If you wish to delete specific information, you can use the 'Remove' button in the sidebar. Additionally, session transcripts are encrypted to maintain confidentiality."
     )
-# with st.expander("How does GPT Lab ensure the security of my information?"):
-#     st.markdown("""We use the SHA-256 PBKDF2 algorithm, a highly secure one-way hashing algorithm, to hash your OpenAI API Key and store it securely. This ensures that your key is protected and cannot be used for any unauthorized purposes. 
-    
-# Additionally, we use a symmetric AES-128 encryption algorithm, with a unique key for each user, to encrypt your chat transcripts with the AI Assistants.""")
 
+au.render_cta()    

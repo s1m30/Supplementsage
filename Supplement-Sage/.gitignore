@@ -3,13 +3,13 @@ __pycache__/
 .streamlit/
 assets/
 Practice/
-load.py
 main.py
 jsload.py
 main.py
 load_from_database.py
 static/
-db/
-college_data.json
 chroma/
 .env
+app_load_from_database.py
+unusedcode.py
+3_Terms.py
