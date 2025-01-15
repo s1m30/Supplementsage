@@ -12,6 +12,7 @@ from langchain_openai import OpenAIEmbeddings
 from fpdf import FPDF
 import uuid
 import os
+from supabase import create_client, Client
 #Authentication Setup
 # supabase,user_id=setup_authentication()
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
