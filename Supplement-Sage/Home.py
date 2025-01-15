@@ -42,15 +42,6 @@ st.write("# Welcome to SupplementSage! 👋")
 # About page content
 st.markdown(
     f"""
-     <style>
-        [data-testid="stAppViewContainer"]>div:first-child{{
-            background-image: url("data:image/png;base64,{img}");
-            background-size: cover;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-            background-position: center;
-        }}
-    </style>
     # SupplementSage 📝✨
     
     Welcome to **SupplementSage**, your AI-powered ally in simplifying the college application process!  
