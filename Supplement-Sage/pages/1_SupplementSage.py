@@ -13,7 +13,7 @@ from fpdf import FPDF
 import uuid
 import os
 #Authentication Setup
-supabase,user_id=setup_authentication()
+# supabase,user_id=setup_authentication()
 
 #Session States Initialization
 # Initialize session state for additional inputs
@@ -42,7 +42,7 @@ with st.sidebar:
     llm=choose_llm()
     print("Returned LLM: ",llm)
     #Component for uploading/viewing and deleting
-    upload_view_delete(supabase)
+    upload_view_delete()
     st.session_state.embedding= OpenAIEmbeddings() if llm=="openai" else HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     print("embedding",st.session_state.embedding)
     #Initialize db session_state
