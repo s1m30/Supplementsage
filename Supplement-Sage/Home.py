@@ -19,8 +19,8 @@ def get_img_as_base64(file):
   return base64.b64encode(data).decode()
 
 # Get the current working directory
-current_directory = os.getcwd()
-img = get_img_as_base64(os.path.join(current_directory+"Supplement-Sage","background.jpg"))
+# current_directory = os.getcwd()
+# img = get_img_as_base64(os.path.join(current_directory+"Supplement-Sage","background.jpg"))
 
 def add_bg_from_url():
     st.markdown(
@@ -37,7 +37,7 @@ def add_bg_from_url():
         unsafe_allow_html=True
     )
 
-add_bg_from_url()
+# add_bg_from_url()
 
 # About page content
 st.markdown(
