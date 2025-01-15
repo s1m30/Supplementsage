@@ -20,7 +20,7 @@ def get_img_as_base64(file):
 
 # Get the current working directory
 current_directory = os.getcwd()
-img = get_img_as_base64("background.jpg")
+img = get_img_as_base64(os.path.join(current_directory+"Supplement-Sage","background.jpg"))
 
 def add_bg_from_url():
     st.markdown(
