@@ -14,6 +14,9 @@ import uuid
 import os
 #Authentication Setup
 # supabase,user_id=setup_authentication()
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 #Session States Initialization
 # Initialize session state for additional inputs
@@ -42,7 +45,7 @@ with st.sidebar:
     llm=choose_llm()
     print("Returned LLM: ",llm)
     #Component for uploading/viewing and deleting
-    upload_view_delete()
+    upload_view_delete(supabase)
     st.session_state.embedding= OpenAIEmbeddings() if llm=="openai" else HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     print("embedding",st.session_state.embedding)
     #Initialize db session_state
