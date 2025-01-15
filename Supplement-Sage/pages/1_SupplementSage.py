@@ -13,6 +13,7 @@ from fpdf import FPDF
 import uuid
 import os
 from supabase import create_client, Client
+from langchain.retrievers import EnsembleRetriever
 #Authentication Setup
 # supabase,user_id=setup_authentication()
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -37,8 +38,6 @@ if "documents" not in st.session_state:
     st.session_state.documents ={}  # Initialize document dictionary
     st.session_state.bm25_retriever = None
  
-
-
 # Sidebar: User Inputs
 with st.sidebar:
     st.title("🤖💬 Supplement Sage")
@@ -53,6 +52,11 @@ with st.sidebar:
     if "db" not in st.session_state:
         st.session_state.db=InMemoryVectorStore(embedding=st.session_state.embedding)
         
+try:
+    st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
+except:
+    st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
+
 
 # Export Chats as PDF
 if st.button("Save Chat as PDF"):
@@ -111,11 +115,11 @@ for message in st.session_state.messages:
 if prompt := st.chat_input("Ask a question"):
     with st.chat_message("Human"):
         st.markdown(prompt)
-
+    
     with st.chat_message("AI"):
         # human_prompt=HumanMessage(prompt)
         with st.spinner('Just a bit...'):   
-            response=st.write_stream(get_response(prompt, st.session_state.messages,st.session_state.db,  st.session_state.dbs,llm,st.session_state.repo_id))
+            response=st.write_stream(get_response(prompt, st.session_state.messages,llm,st.session_state.repo_id))
     st.session_state.messages.append(HumanMessage(content=prompt))
     st.session_state.messages.append(AIMessage(content=response))
 

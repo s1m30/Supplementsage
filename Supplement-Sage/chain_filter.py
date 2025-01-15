@@ -36,30 +36,42 @@ class BooleanOutputParser(BaseOutputParser[bool]):
         Returns:
             boolean
         """
-        # Normalize text for case insensitivity
-        normalized_text = text.upper()
+        def parse_attempt(text: str) -> bool:
+            regexp = rf"\b({self.true_val}|{self.false_val})\b"
 
-        # Check if true_val or false_val is present in the output
-        contains_true = self.true_val.upper() in normalized_text
-        contains_false = self.false_val.upper() in normalized_text
+            truthy = {
+                val.upper()
+                for val in re.findall(regexp, text, flags=re.IGNORECASE | re.MULTILINE)
+            }
+            if self.true_val.upper() in truthy:
+                if self.false_val.upper() in truthy:
+                    return None  # Ambiguous response
+                return True
+            elif self.false_val.upper() in truthy:
+                if self.true_val.upper() in truthy:
+                    return None  # Ambiguous response
+                return False
+            return None  # Neither found
 
-        if contains_true and contains_false:
-            return True
+        # Attempt to parse up to 3 times
+        for _ in range(2):
+            result = parse_attempt(text)
+            if result is not None:
+                return result
 
-        if contains_true:
-            return True
-        if contains_false:
-            return False
+        # Final attempt
+        result = parse_attempt(text)
+        if result is not None:
+            return result
 
-        # Default to True if no clear "NO" and "YES" is present
+        # Default to True if still ambiguous or no clear result
         return True
 
     @property
     def _type(self) -> str:
         """Snake-case string identifier for an output parser type."""
         return "boolean_output_parser"
-
-
+    
 def _get_default_chain_prompt() -> PromptTemplate:
     return PromptTemplate(
         template=prompt_template,

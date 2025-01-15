@@ -10,7 +10,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 # Combine retrievers into an ensemble retriever     
 @st.fragment   
-def get_response(query, chat_history,db,memorydbs,llm,repo_id):
+def get_response(query, chat_history,llm,repo_id):
     ### Contextualize question ###
     contextualize_q_system_prompt = f"""Given a chat history and the latest user question
     which might reference context in the chat history, formulate a standalone question 
@@ -28,13 +28,9 @@ def get_response(query, chat_history,db,memorydbs,llm,repo_id):
         ]
     )
     try:
-        ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in memorydbs]+ [db.as_retriever()]+[st.session_state.bm25_retriever])
-    except:
-        ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in memorydbs]+ [db.as_retriever()])     
-    try:
         _filter = LLMChainFilter.from_llm(hf)
         compressor_retriever = ContextualCompressionRetriever(
-            base_compressor=_filter, base_retriever=ensemble_retriever
+            base_compressor=_filter, base_retriever=st.session_state.ensemble_retriever
         )
         history_aware_retriever = create_history_aware_retriever(
             hf, compressor_retriever, contextualize_q_prompt
@@ -42,7 +38,7 @@ def get_response(query, chat_history,db,memorydbs,llm,repo_id):
         print("Compressor retriever used")
     except:
         history_aware_retriever = create_history_aware_retriever(
-            hf, ensemble_retriever, contextualize_q_prompt
+            hf, st.session_state.ensemble_retriever, contextualize_q_prompt
         )
         print("Not used")
 

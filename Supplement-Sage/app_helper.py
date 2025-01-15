@@ -58,7 +58,12 @@ def get_youtube_video_info(url):
         return title, channel_name
     except Exception as e:
         return None, f"Error: {e}"
-    
+
+# def reinit_ensmretr():
+#     try:
+#         st.session_state = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
+#     except:
+#         st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
 # Function to remove a source
 @st.fragment
 def remove_source(doc_id: str):
@@ -134,6 +139,8 @@ def add_to_vector_store(college, essay_data):
 # Function to delete a vector store for a college
 def delete_vector_store(college):
     if college in st.session_state:
+        if st.session_state[college] in st.session_state.dbs:
+            st.session.dbs.remove(st.session_state[college] )
         del st.session_state[college]
         
 @st.cache_resource  # Use cache_resource for objects that don't serialize well
@@ -142,16 +149,19 @@ def llm_getter(llm, repo_id=""):  # Make repo_id optional
         if repo_id=="":
             repo_id = "HuggingFaceH4/zephyr-7b-beta"
         hf1= HuggingFaceEndpoint(
-            repo_id=repo_id,
+            repo_id="HuggingFaceH4/zephyr-7b-beta",
             task="text-generation",
             max_new_tokens=1024,
             repetition_penalty=1.03,
             callbacks=[StreamingStdOutCallbackHandler()],
+            streaming=True
+            
+            
         )
         hf2=HuggingFaceEndpoint(
-            repo_id="google/gemma-7b"
+            repo_id=repo_id
         )
-        return hf2,ChatHuggingFace(llm=hf1).bind(max_tokens=8192, temperature=0.0) # Return only the ChatHuggingFace object
+        return hf2,ChatHuggingFace(llm=hf1).bind(max_tokens=4096, temperature=0.0) # Return only the ChatHuggingFace object
     elif llm == "openai":
         return OpenAI(temperature=0.0),ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0)
     else:
