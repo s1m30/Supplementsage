@@ -5,7 +5,7 @@ from langchain.retrievers import EnsembleRetriever,ContextualCompressionRetrieve
 import streamlit as st
 from app_helper import llm_getter
 from langchain.retrievers.document_compressors import LLMChainExtractor
-from langchain.retrievers.document_compressors import LLMChainFilter,EmbeddingsFilter
+from chain_filter import LLMChainFilter
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # Combine retrievers into an ensemble retriever     
