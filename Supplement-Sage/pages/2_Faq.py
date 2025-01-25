@@ -1,5 +1,5 @@
 import streamlit as st 
-import app_component as au
+import langchain_RAG.app_component as au
 
 st.set_page_config(
     page_title="SupplementSage - FAQ",
