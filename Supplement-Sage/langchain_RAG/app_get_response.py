@@ -1,16 +1,14 @@
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain.retrievers import EnsembleRetriever,ContextualCompressionRetriever
+from langchain.retrievers import ContextualCompressionRetriever
 import streamlit as st
-from app_helper import llm_getter
-from langchain.retrievers.document_compressors import LLMChainExtractor
+from .app_helper import llm_getter
 from chain_filter import LLMChainFilter
-from langchain_huggingface import HuggingFaceEmbeddings
 
 # Combine retrievers into an ensemble retriever     
-@st.fragment   
-def get_response(query, chat_history,llm,repo_id):
+@st.fragment     
+def langchain_RAG(query,chat_history,llm,repo_id):
     ### Contextualize question ###
     contextualize_q_system_prompt = f"""Given a chat history and the latest user question
     which might reference context in the chat history, formulate a standalone question 
@@ -59,3 +57,4 @@ def get_response(query, chat_history,llm,repo_id):
 
     rag_chain = create_retrieval_chain( history_aware_retriever,question_answer_chain).pick("answer")
     return rag_chain.stream({"input":query,"chat_history":chat_history})
+

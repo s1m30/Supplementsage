@@ -6,9 +6,16 @@ from typing import Dict, List, Any, Union
 from tempfile import NamedTemporaryFile
 import streamlit as st
 from langchain.schema import Document
-from app_helper import get_youtube_metadata,clean_html,split_text,filter_chunks
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.retrievers import BM25Retriever
+from bs4 import BeautifulSoup
+import requests
+
+def clean_html(html_content):
+    soup = BeautifulSoup(html_content, "html.parser")
+    for tag in soup(["nav", "footer", "script", "style"]):
+        tag.decompose()
+    return soup.get_text(separator="\n", strip=True)
 
 def process_html_with_loader(loader):
     documents = loader.load()
@@ -16,9 +23,18 @@ def process_html_with_loader(loader):
 
     for doc in documents:
         cleaned_text = clean_html(doc.page_content)
-        chunks = split_text(cleaned_text)
-        filtered_chunks = filter_chunks(chunks)
-
+        text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=100,
+        separators=["\n\n\n","\n\n", "\n", " "]
+    )
+        chunks = text_splitter.split_text(cleaned_text)
+        filtered_chunks = [
+        chunk for chunk in chunks
+        if 50 < len(chunk.strip()) < 2000
+        and not chunk.isspace()
+    ]
+        #Functions for Loading HTML Sources
         for chunk in filtered_chunks:
             processed_documents.append(Document(
                 page_content=chunk,
@@ -26,6 +42,34 @@ def process_html_with_loader(loader):
             ))
 
     return processed_documents
+
+# Function to get YouTube metadata
+def get_youtube_metadata(video_id: str): 
+    title, channel = get_youtube_video_info(f"https://www.youtube.com/watch?v={video_id}")
+    return {"source": f"https://www.youtube.com/watch?v={video_id}", "title": f"{title}|{channel}", "type": "youtube"}
+
+def get_youtube_video_info(url):
+    try:
+        # Send a request to the YouTube video URL
+        response = requests.get(url)
+        response.raise_for_status()  # Check for HTTP request errors
+
+        # Parse the webpage content
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Extract the title from the HTML
+        title = soup.find("title").text
+        if title.endswith(" - YouTube"):
+            title = title.replace(" - YouTube", "").strip()
+
+        # Extract the channel name
+        channel_tag = soup.find("link", itemprop="name")
+        channel_name = channel_tag["content"] if channel_tag else "Unknown Channel"
+
+        return title, channel_name
+    except Exception as e:
+        return None, f"Error: {e}"
+
 
 @st.fragment
 def load_sources(doc: Dict[str, Union[List[Any], List[str]]], db, bmdocs):
@@ -102,25 +146,24 @@ def group_sources(files: List, ytb_urls: str, web_urls: str) -> Dict[str, List]:
     """
     sources = {ext: [] for ext in ["txt", "pdf", "docx", "doc", "youtube", "web","jpg"]}
      # Add YouTube URLs
-    for url in ytb_urls:
-        if url.strip():
-            # Parse the URL
-            print("urlL",url)
-            parsed_url = urlparse(url)
 
-            # Extract query parameters
-            query_params = parse_qs(parsed_url.query)
+    if ytb_urls.strip():
+        # Parse the URL
+        print("urlL",ytb_urls)
+        parsed_url = urlparse(ytb_urls)
 
-            # Get the value for 'v'
-            video_id = query_params.get('v')[0]
+        # Extract query parameters
+        query_params = parse_qs(parsed_url.query)
 
-            print("Video ID:", video_id)
-            sources["youtube"].append(video_id)
+        # Get the value for 'v'
+        video_id = query_params.get('v')[0]
+
+        print("Video ID:", video_id)
+        sources["youtube"].append(video_id)
 
     # Add Web URLs
-    for url in web_urls:
-        if url.strip():
-            sources["web"].append(url)
+    if web_urls.strip():
+        sources["web"].append(web_urls)
     for file in files:
         file_type = file.name.split('.')[-1].lower()
         if file_type in sources:

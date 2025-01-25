@@ -1,69 +1,11 @@
 import streamlit as st
-from bs4 import BeautifulSoup
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-import requests
 from langchain.schema import Document
 from langchain_core.vectorstores import InMemoryVectorStore
-from langchain_openai import ChatOpenAI,OpenAI
+from langchain_openai import ChatOpenAI,OpenAI,OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings,ChatHuggingFace, HuggingFaceEndpoint
 from langchain_core.callbacks.streaming_stdout import StreamingStdOutCallbackHandler  
 from langchain_community.retrievers import BM25Retriever
-import os
 
-#Functions for Loading HTML Sources
-def clean_html(html_content):
-    soup = BeautifulSoup(html_content, "html.parser")
-    for tag in soup(["nav", "footer", "script", "style"]):
-        tag.decompose()
-    return soup.get_text(separator="\n", strip=True)
-
-def split_text(cleaned_text):
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=100,
-        separators=["\n\n\n","\n\n", "\n", " "]
-    )
-    return text_splitter.split_text(cleaned_text)
-
-def filter_chunks(chunks):
-    return [
-        chunk for chunk in chunks
-        if 50 < len(chunk.strip()) < 2000
-        and not chunk.isspace()
-    ]
-    
-# Function to get YouTube metadata
-def get_youtube_metadata(video_id: str): 
-    title, channel = get_youtube_video_info(f"https://www.youtube.com/watch?v={video_id}")
-    return {"source": f"https://www.youtube.com/watch?v={video_id}", "title": f"{title}|{channel}", "type": "youtube"}
-
-def get_youtube_video_info(url):
-    try:
-        # Send a request to the YouTube video URL
-        response = requests.get(url)
-        response.raise_for_status()  # Check for HTTP request errors
-
-        # Parse the webpage content
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Extract the title from the HTML
-        title = soup.find("title").text
-        if title.endswith(" - YouTube"):
-            title = title.replace(" - YouTube", "").strip()
-
-        # Extract the channel name
-        channel_tag = soup.find("link", itemprop="name")
-        channel_name = channel_tag["content"] if channel_tag else "Unknown Channel"
-
-        return title, channel_name
-    except Exception as e:
-        return None, f"Error: {e}"
-
-# def reinit_ensmretr():
-#     try:
-#         st.session_state = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
-#     except:
-#         st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
 # Function to remove a source
 @st.fragment
 def remove_source(doc_id: str):
@@ -103,16 +45,6 @@ def get_college_data(college,_sup):
     # Fetch data from Supabase
     response = _sup.table("college_questions").select("*").eq("college_name", college).execute()
     return [i for i in response.data]
-
-# Function to dynamically add web loader inputs
-def add_web_input():
-    if len(st.session_state.web_inputs) < 2:
-        st.session_state.web_inputs.append("")
-
-# Function to dynamically add YouTube loader inputs
-def add_youtube_input():
-    if len(st.session_state.youtube_inputs) < 2:
-        st.session_state.youtube_inputs.append("")
 
 # Function to get colleges names
 @st.cache_data
@@ -154,9 +86,7 @@ def llm_getter(llm, repo_id=""):  # Make repo_id optional
             max_new_tokens=1024,
             repetition_penalty=1.03,
             callbacks=[StreamingStdOutCallbackHandler()],
-            streaming=True
-            
-            
+            streaming=True  
         )
         hf2=HuggingFaceEndpoint(
             repo_id=repo_id
@@ -166,3 +96,4 @@ def llm_getter(llm, repo_id=""):  # Make repo_id optional
         return OpenAI(temperature=0.0),ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0)
     else:
         raise ValueError(f"Invalid llm: {llm}. Must be 'huggingface', 'openai.")
+

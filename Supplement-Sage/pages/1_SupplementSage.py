@@ -2,95 +2,71 @@
 from typing import Dict, List, Any, Union
 import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_huggingface import HuggingFaceEmbeddings
-from app_get_response import get_response
-from app_authentication import setup_authentication
-from app_component import upload_view_delete
-from langchain_core.vectorstores import InMemoryVectorStore
-from app_component  import choose_llm
-from langchain_openai import OpenAIEmbeddings
+from langchain_RAG.app_get_response import langchain_RAG
+from langchain_RAG.app_authentication import setup_authentication
+from CortexSearch_RAG.helper import cortex_config,answer_question,process_url,file_and_url_upload
 from fpdf import FPDF
 import uuid
 import os
-from supabase import create_client, Client
+from langchain_RAG.app_component import langchain_config
 from langchain.retrievers import EnsembleRetriever
-#Authentication Setup
-# supabase,user_id=setup_authentication()
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-#Session States Initialization
-# Initialize session state for additional inputs
-if "web_inputs" not in st.session_state:
-    st.session_state.web_inputs = []
+def init_messages():
+    # Initialize chat history
+    if st.session_state.clear_conversation or st.session_state.RGProv or "messages" not in st.session_state:
+        st.session_state.messages = []
+# Export Chats as PDF
+def save_chat():
+    if st.button("Save Chat as PDF"):
+        if st.session_state.messages:
+            pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
 
-if "youtube_inputs" not in st.session_state:
-    st.session_state.youtube_inputs = []
+            # Add content to the PDF
+            pdf.cell(200, 10, txt="Chat History", ln=True, align='C')
+            pdf.ln(10)  # Add a line break
 
-# Initialize session state for saved sources
-if "saved_sources" not in st.session_state:
-    st.session_state.saved_sources = []
+            for msg in st.session_state.messages:
+                role = "Human" if isinstance(msg, HumanMessage) else "AI"
+                pdf.multi_cell(0, 10, txt=f"{role}: {msg.content}")
+                pdf.ln(5)  # Add spacing between messages
 
-if "dbs" not in st.session_state:
-    st.session_state.dbs=[]
-if "documents" not in st.session_state:
-    st.session_state.documents ={}  # Initialize document dictionary
-    st.session_state.bm25_retriever = None
- 
+            # Save PDF
+            pdf_file = f"chat_{str(uuid.uuid4())}_session.pdf"
+            pdf.output(pdf_file)
+
+            # Provide download button for the PDF
+            with open(pdf_file, "rb") as f:
+                st.download_button(
+                    label="Download Chat as PDF",
+                    data=f,
+                    file_name=pdf_file,
+                    mime="application/pdf"
+                )
+            
+            os.remove(pdf_file)
+        else:
+            st.warning("No chat messages to save!")
+
 # Sidebar: User Inputs
 with st.sidebar:
     st.title("🤖💬 Supplement Sage")
+    st.button("Start Over", key="clear_conversation", on_click=init_messages)
     #Component for choosing and inputting LLM creds
-    llm=choose_llm()
-    print("Returned LLM: ",llm)
-    #Component for uploading/viewing and deleting
-    upload_view_delete(supabase)
-    st.session_state.embedding= OpenAIEmbeddings() if llm=="openai" else HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    print("embedding",st.session_state.embedding)
-    #Initialize db session_state
-    if "db" not in st.session_state:
-        st.session_state.db=InMemoryVectorStore(embedding=st.session_state.embedding)
-        
-try:
-    st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
-except:
-    st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
-
-
-# Export Chats as PDF
-if st.button("Save Chat as PDF"):
-    if st.session_state.messages:
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-
-        # Add content to the PDF
-        pdf.cell(200, 10, txt="Chat History", ln=True, align='C')
-        pdf.ln(10)  # Add a line break
-
-        for msg in st.session_state.messages:
-            role = "Human" if isinstance(msg, HumanMessage) else "AI"
-            pdf.multi_cell(0, 10, txt=f"{role}: {msg.content}")
-            pdf.ln(5)  # Add spacing between messages
-
-        # Save PDF
-        pdf_file = f"chat_{str(uuid.uuid4())}_session.pdf"
-        pdf.output(pdf_file)
-
-        # Provide download button for the PDF
-        with open(pdf_file, "rb") as f:
-            st.download_button(
-                label="Download Chat as PDF",
-                data=f,
-                file_name=pdf_file,
-                mime="application/pdf"
-            )
-        
-        os.remove(pdf_file)
+    RAG_Provider=st.selectbox("Choose a RAG Provider:",options=["CortexSearch", "Langchain"],key="RGProv",on_change=init_messages)
+    init_messages()
+    if RAG_Provider=="CortexSearch":
+        cortex_config() 
     else:
-        st.warning("No chat messages to save!")
+        langchain_config()
+        try:
+            st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
+        except:
+            st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
+    
+save_chat()
 # Main Application   
 st.title("🧠 SupplementSage: Your AI-Powered College Essay Assistant")
 st.markdown("""
@@ -104,22 +80,53 @@ st.markdown("""
 - ##### 👈 Refer to the Walkthrough for examples**
 - ##### Saved Chats coming soon
 """,unsafe_allow_html= True)
+ 
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+def display_chat_messages(messages, method):
+    """Displays chat messages based on the chosen method."""
+    if method == "Langchain":
+        for message in messages:
+            with st.chat_message("Human" if isinstance(message, HumanMessage) else "AI"):
+                st.write(message.content)
+    elif method == "CortexSearch":
+        for message in messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-for message in st.session_state.messages:
-    with st.chat_message("Human" if isinstance(message, HumanMessage) else "AI"):
-        st.write(message.content)
+def handle_user_input(prompt, method):
+    """Handles user input and response generation for the chosen method."""
+    if method == "Langchain":
+        with st.chat_message("Human"):
+            st.markdown(prompt)
 
+        with st.chat_message("AI"):
+            with st.spinner("Just a bit..."):
+                response = st.write_stream(langchain_RAG(prompt, st.session_state.messages, st.session_state.llm, st.session_state.repo_id))
+        
+        st.session_state.messages.append(HumanMessage(content=prompt))
+        st.session_state.messages.append(AIMessage(content=response))
+
+    elif method == "CortexSearch":
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            question = prompt.replace("'", "")
+
+            with st.spinner("mistral-large thinking..."):
+                response = answer_question(question)
+                response = response.replace("'", "")
+                message_placeholder.markdown(response)
+
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Display chat messages
+display_chat_messages(st.session_state.messages, RAG_Provider)
+
+# Handle user input
 if prompt := st.chat_input("Ask a question"):
-    with st.chat_message("Human"):
-        st.markdown(prompt)
-    
-    with st.chat_message("AI"):
-        # human_prompt=HumanMessage(prompt)
-        with st.spinner('Just a bit...'):   
-            response=st.write_stream(get_response(prompt, st.session_state.messages,llm,st.session_state.repo_id))
-    st.session_state.messages.append(HumanMessage(content=prompt))
-    st.session_state.messages.append(AIMessage(content=response))
+    handle_user_input(prompt, RAG_Provider)
 
