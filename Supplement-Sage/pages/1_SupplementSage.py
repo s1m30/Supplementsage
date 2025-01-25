@@ -4,7 +4,7 @@ import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_RAG.app_get_response import langchain_RAG
 from langchain_RAG.app_authentication import setup_authentication
-from CortexSearch_RAG.helper import cortex_config,answer_question,process_url,file_and_url_upload
+from CortexSearch_RAG.helper import cortex_config,answer_question
 from fpdf import FPDF
 import uuid
 import os
@@ -13,10 +13,9 @@ from langchain.retrievers import EnsembleRetriever
 
 def init_messages():
     # Initialize chat history
-    if st.session_state.clear_conversation or st.session_state.RGProv or "messages" not in st.session_state:
-        st.session_state.messages = []
+    st.session_state.messages = []
 # Export Chats as PDF
-def save_chat():
+def save_chat(RG_PROV):
     if st.button("Save Chat as PDF"):
         if st.session_state.messages:
             pdf = FPDF()
@@ -29,7 +28,11 @@ def save_chat():
             pdf.ln(10)  # Add a line break
 
             for msg in st.session_state.messages:
-                role = "Human" if isinstance(msg, HumanMessage) else "AI"
+                if RG_PROV=="Langchain":
+                    role = "Human" if isinstance(msg, HumanMessage) else "AI"
+                elif RG_PROV=="CortexSearch":
+                    # For CortexSearch, use the role and content directly from the dictionary
+                    role = msg["role"].capitalize()
                 pdf.multi_cell(0, 10, txt=f"{role}: {msg.content}")
                 pdf.ln(5)  # Add spacing between messages
 
@@ -49,38 +52,6 @@ def save_chat():
             os.remove(pdf_file)
         else:
             st.warning("No chat messages to save!")
-
-# Sidebar: User Inputs
-with st.sidebar:
-    st.title("🤖💬 Supplement Sage")
-    st.button("Start Over", key="clear_conversation", on_click=init_messages)
-    #Component for choosing and inputting LLM creds
-    RAG_Provider=st.selectbox("Choose a RAG Provider:",options=["CortexSearch", "Langchain"],key="RGProv",on_change=init_messages)
-    init_messages()
-    if RAG_Provider=="CortexSearch":
-        cortex_config() 
-    else:
-        langchain_config()
-        try:
-            st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
-        except:
-            st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
-    
-save_chat()
-# Main Application   
-st.title("🧠 SupplementSage: Your AI-Powered College Essay Assistant")
-st.markdown("""
-#### Supplementsage is your #1 A.I. powered tool for college essays.
-
-## Features 🌟
-- ##### Upload from multiple sources- Youtube, Websites, PDFs, Texts, Microsoft Word(docx)
-- ##### Summarize or analyze content from university websites, youtube videos, essay sample documents e.t.c.
-- ##### Access 110+ supplemental essays easily on the app.
-- ##### Choose the role of your AI bot(University Analysis, Essay Grading, Essay Comparison)
-- ##### 👈 Refer to the Walkthrough for examples**
-- ##### Saved Chats coming soon
-""",unsafe_allow_html= True)
- 
 
 def display_chat_messages(messages, method):
     """Displays chat messages based on the chosen method."""
@@ -107,8 +78,6 @@ def handle_user_input(prompt, method):
         st.session_state.messages.append(AIMessage(content=response))
 
     elif method == "CortexSearch":
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -120,13 +89,49 @@ def handle_user_input(prompt, method):
                 response = answer_question(question)
                 response = response.replace("'", "")
                 message_placeholder.markdown(response)
-
+        st.session_state.messages.append({"role": "user", "content": prompt})
         st.session_state.messages.append({"role": "assistant", "content": response})
 
-# Display chat messages
-display_chat_messages(st.session_state.messages, RAG_Provider)
+def main():
+    # Sidebar: User Inputs
+    with st.sidebar:
+        st.title("🤖💬 Supplement Sage")
+        st.button("Start Over", key="clear_conversation", on_click=init_messages)
+        #Component for choosing and inputting LLM creds
+        RAG_Provider=st.selectbox("Choose a RAG Provider:",options=["CortexSearch", "Langchain"],key="RGProv",on_change=init_messages)
+        if 'messages' not in st.session_state:
+            init_messages()
+        if RAG_Provider=="CortexSearch":
+            cortex_config() 
+        else:
+            langchain_config()
+            try:
+                st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()]+[st.session_state.bm25_retriever])
+            except:
+                st.session_state.ensemble_retriever = EnsembleRetriever(retrievers=[i.as_retriever() for i in st.session_state.dbs]+ [st.session_state.db.as_retriever()])     
+        
+    save_chat(RAG_Provider)
+    # Main Application   
+    st.title("🧠 SupplementSage: Your AI-Powered College Essay Assistant")
+    st.markdown("""
+    #### Supplementsage is your #1 A.I. powered tool for college essays.
 
-# Handle user input
-if prompt := st.chat_input("Ask a question"):
-    handle_user_input(prompt, RAG_Provider)
+    ## Features 🌟
+    - ##### Upload from multiple sources- Youtube, Websites, PDFs, Texts, Microsoft Word(docx)
+    - ##### Summarize or analyze content from university websites, youtube videos, essay sample documents e.t.c.
+    - ##### Access 110+ supplemental essays easily on the app.
+    - ##### Choose the role of your AI bot(University Analysis, Essay Grading, Essay Comparison)
+    - ##### 👈 Refer to the Walkthrough for examples**
+    - ##### Saved Chats coming soon
+    """,unsafe_allow_html= True)
 
+
+    # Display chat messages
+    display_chat_messages(st.session_state.messages, RAG_Provider)
+
+    # Handle user input
+    if prompt := st.chat_input("Ask a question"):
+        handle_user_input(prompt, RAG_Provider)
+
+if __name__ == "__main__":
+    main()

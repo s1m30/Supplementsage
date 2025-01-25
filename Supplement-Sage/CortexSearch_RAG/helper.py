@@ -28,15 +28,16 @@ COLUMNS2=[
     "content",
     "url"
 ]
-def get_parameters(account, user, password):
+def get_parameters(account, user, password,role="ACCOUNTADMIN",database="CC_QUICKSTART_CORTEX_SEARCH_DOCS"
+                   ,warehouse="COMPUTE_WH",schema="DATA"):
     CONNECTION_PARAMETERS = {
         "account": account,
         "user": user,
         "password": password,
-        "role": "ACCOUNTADMIN",
-        "database": "CC_QUICKSTART_CORTEX_SEARCH_DOCS",
-        "warehouse": "COMPUTE_WH",
-        "schema": "DATA",
+        "role": role,
+        "database":database,
+        "warehouse": warehouse,
+        "schema": schema,
     }
     return CONNECTION_PARAMETERS
 essay_prompts_session = Session.builder.configs(get_parameters(st.secrets["ACCOUNT"],st.secrets["USER"],st.secrets["PASSWORD"])).create()
@@ -67,15 +68,20 @@ def upload_source(conn):
     
 def init_users_sources():
     with st.expander(label="Snowflake Account Credentials"):
-        st.text_input("account",type="password",key="account")
-        st.text_input("user",type="password",key="user") 
-        st.text_input("password",type="password",key="password")
-   
+        st.text_input("ACCOUNT",type="password",key="account")
+        st.text_input("USER",type="password",key="user") 
+        st.text_input("PASSWORD",type="password",key="password")
+        st.text_input("ROLE",type="default",key="role",value="ACCOUNTADMIN")
+        st.text_input("DATABASE",type="default",key="database",value="CC_QUICKSTART_CORTEX_SEARCH_DOCS") 
+        st.text_input("WAREHOUSE",type="default",key="warehouse",value="COMPUTE_WH")
+        st.text_input("SCHEMA",type="default",key="schema",value="DATA")
+        
+        params=[st.session_state.account, st.session_state.user, st.session_state.password,st.session_state.role,st.session_state.database,st.session_state.warehouse,st.session_state.schema]
         try:
             st.session_state.personal_sources_session = Session.builder.configs(
-                get_parameters(st.session_state.account, st.session_state.user, st.session_state.password)
+                get_parameters(*params)
             ).create()
-            conn = connect(**get_parameters(st.session_state.account, st.session_state.user, st.session_state.password))
+            conn = connect(**get_parameters(*params))
             titles = st.session_state.personal_sources_session.table('website_data').select('title').distinct().collect()
             title_list = ["ALL"] + [title.TITLE for title in titles if title]
             title_list = list(filter(None, title_list))# Remove empty values
@@ -84,6 +90,7 @@ def init_users_sources():
             st.success("Credentials Verified!!")
         except:
             st.warning("Please enter valid credentials.")
+
 
 def cortex_config():
     essay_prompts = essay_prompts_session.table('Essay_Prompts').select('college_name').distinct().collect()
@@ -141,13 +148,13 @@ def summarize_question_with_history(chat_history, question):
         Answer with only the query. Do not add any explanation.
         
         <chat_history>
-        {chat_history}
+        {str(chat_history)}
         </chat_history>
         <question>
         {question}
         </question>
         """
-    
+    print("This is the prompt",prompt)
     sumary = Complete('mistral-large', prompt)   
 
     # if st.session_state.debug:
@@ -163,6 +170,7 @@ def create_prompt (myquestion):
 
     if chat_history != []: #There is chat_history, so not first question
         question_summary = summarize_question_with_history(chat_history, myquestion)
+        st.sidebar.json(question_summary)
         prompt_context =  get_similar_chunks_search_service(question_summary)
     else:
         prompt_context = get_similar_chunks_search_service(myquestion) #First question when using history
