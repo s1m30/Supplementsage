@@ -49,7 +49,7 @@ if "user" not in st.session_state:
     st.session_state.user = ""
 if "password" not in st.session_state:
     st.session_state.password = ""
-def upload_source(conn):
+def upload_source():
     uploaded_file, website_url,save_sources = file_and_url_upload()
     if save_sources:
         if uploaded_file is not None:
@@ -61,7 +61,7 @@ def upload_source(conn):
             try:
                 # Process website URL here (e.g., load content using LangChain, extract data)
                 st.write("Website URL:", website_url)
-                process_url(website_url,conn)
+                process_url(website_url)
             except:
                 st.warning("Input a valid url")
             st.sidebar.success("Sources saved and questions added to the vector store!")
@@ -81,12 +81,11 @@ def init_users_sources():
             st.session_state.personal_sources_session = Session.builder.configs(
                 get_parameters(*params)
             ).create()
-            conn = connect(**get_parameters(*params))
             titles = st.session_state.personal_sources_session.table('website_data').select('title').distinct().collect()
             title_list = ["ALL"] + [title.TITLE for title in titles if title]
             title_list = list(filter(None, title_list))# Remove empty values
-            st.sidebar.multiselect('Select the sources you would like to include', title_list, key="title_value")
-            upload_source(conn)
+            st.sidebar.multiselect('Select the sources you would like to include', title_list, key="title_value",default="ALL")
+            upload_source()
             st.success("Credentials Verified!!")
         except:
             st.warning("Please enter valid credentials.")
@@ -115,7 +114,7 @@ def get_similar_chunks_search_service(query):
     response1 = essay_prompts_service.search(query, COLUMNS1, filter=filter_obj1, limit=NUM_CHUNKS)
     response2 = []  # Default value
 
-    if st.session_state.choice=="Yes": 
+    if st.session_state.personal_sources_session: 
         personal_sources_service = make_search_service(st.session_state.personal_sources_session, CORTEX_SEARCH_SERVICE2)
         if st.session_state.title_value == "ALL":
             response2 = personal_sources_service.search(query, COLUMNS2, limit=NUM_CHUNKS)
@@ -123,7 +122,7 @@ def get_similar_chunks_search_service(query):
             filter_obj2 = [{"@eq": {"title": source}} for source in st.session_state.title_value]
         response2 = personal_sources_service.search(query, COLUMNS2, filter={"@or": filter_obj2}, limit=NUM_CHUNKS)
     response = str(response1.results + (response2.results if response2 else []))
-    st.sidebar.json(response)
+    print(response)
     return response
 
 
@@ -170,7 +169,6 @@ def create_prompt (myquestion):
 
     if chat_history != []: #There is chat_history, so not first question
         question_summary = summarize_question_with_history(chat_history, myquestion)
-        st.sidebar.json(question_summary)
         prompt_context =  get_similar_chunks_search_service(question_summary)
     else:
         prompt_context = get_similar_chunks_search_service(myquestion) #First question when using history
@@ -230,9 +228,11 @@ def answer_question(myquestion):
 
     return response
 
-def process_url(url,conn):
+def process_url(url):
     if url:
         try:
+            params=[st.session_state.account, st.session_state.user, st.session_state.password,st.session_state.role,st.session_state.database,st.session_state.warehouse,st.session_state.schema]
+            conn = connect(**get_parameters(*params))
             loader = WebBaseLoader(url)
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=1000,
