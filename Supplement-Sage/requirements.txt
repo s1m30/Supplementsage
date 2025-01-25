@@ -39,6 +39,7 @@ sentence-transformers==3.1.1
 snowflake==0.8.0
 snowflake.core==0.8.0
 snowflake-snowpark-python==1.26.0
+snowflake-ml-python==1.7.3
 streamlit==1.40.2
 streamlit-option-menu==0.4.0
 streamlit-supabase-auth==1.0.2
